@@ -31,7 +31,7 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^25.7.0",
     "js-tiktoken": "^1.0.21",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
