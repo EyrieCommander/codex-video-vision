@@ -69,7 +69,7 @@ Example user-level key file:
 
 ```bash
 mkdir -p ~/.codex-video-vision
-printf 'OPENAI_API_KEY=sk-...\n' > ~/.codex-video-vision/.env
+printf 'OPENAI_API_KEY=your_openai_api_key_here\n' > ~/.codex-video-vision/.env
 chmod 600 ~/.codex-video-vision/.env
 ```
 
@@ -82,7 +82,7 @@ chmod 600 ~/.codex-video-vision/.env
 5. Use `video_detail` for close inspection around key moments.
 6. Avoid re-extracting cached frames when `enable_index` is on.
 
-## Witness / Storyboard Review Use Case
+## Storyboard Review Use Case
 
 For educational video production, the useful Codex task is often not "summarize this video" but "compare this render against the intended script." A good review packet should include:
 
@@ -97,7 +97,9 @@ For educational video production, the useful Codex task is often not "summarize 
 
 ## Publishing Notes
 
-The repository metadata points to `https://github.com/EyrieCommander/codex-video-vision`. Before a release, run `npm run build`, `npm test`, `npm run smoke:mcp`, and `npm pack --dry-run` from `mcp-server`. If publishing to npm later, switch `.mcp.json` from local `node ./mcp-server/dist/index.js` to the published package command.
+The repository metadata points to `https://github.com/EyrieCommander/codex-video-vision`. Before a release, run `npm run build`, `npm test`, `npm run smoke:mcp`, and `npm pack --dry-run` from `mcp-server`. The GitHub release workflow is manual until npm Trusted Publisher setup is intentional. If publishing to npm later, switch `.mcp.json` from local `node ./mcp-server/dist/index.js` to the published package command.
+
+The hero image in `assets/hero.avif` is inherited from the upstream `claude-video-vision` project. Replace it before using a distinct project brand or marketplace listing.
 
 ## License
 
