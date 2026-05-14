@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.js.map
+
+# Keep the built MCP server available for local Codex plugin runs.
+!mcp-server/dist/
+!mcp-server/dist/**
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Env / secrets
+.env
+.env.*
+
+# Plugin runtime config (user-specific)
+config.json
+
+# Temp files from video processing
+*.wav
+*.jpg
+*.png
+!mcp-server/tests/fixtures/*

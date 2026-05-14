@@ -1,0 +1,41 @@
+import { z } from "zod";
+import { join } from "path";
+import { homedir } from "os";
+import { rmSync, existsSync } from "fs";
+import { loadConfig, saveConfig } from "../config.js";
+const CONFIG_PATH = join(homedir(), ".codex-video-vision", "config.json");
+export function registerVideoConfigure(server) {
+    server.tool("video_configure", "Configure video perception preferences (backend, resolution, fps, whisper model, etc.)", {
+        backend: z.enum(["gemini-api", "local", "openai"]).optional(),
+        whisper_engine: z.enum(["cpp", "python"]).optional(),
+        whisper_model: z.enum(["tiny", "base", "small", "medium", "large-v3-turbo", "large-v3", "auto"]).optional(),
+        whisper_at: z.boolean().optional(),
+        frame_mode: z.enum(["images", "descriptions"]).optional(),
+        frame_resolution: z.number().min(128).max(2048).optional(),
+        default_fps: z.union([z.number().positive(), z.literal("auto")]).optional(),
+        max_frames: z.number().min(1).max(1000).optional(),
+        enable_index: z.boolean().optional(),
+        session_max_age_days: z.number().min(1).optional(),
+        clear_sessions: z.boolean().optional(),
+    }, async (params) => {
+        if (params.clear_sessions) {
+            const sessionsDir = join(homedir(), ".codex-video-vision", "sessions");
+            if (existsSync(sessionsDir)) {
+                rmSync(sessionsDir, { recursive: true, force: true });
+            }
+        }
+        const current = loadConfig(CONFIG_PATH);
+        const updated = { ...current };
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== undefined && key !== "clear_sessions") {
+                updated[key] = value;
+            }
+        }
+        saveConfig(CONFIG_PATH, updated);
+        let responseText = `Configuration saved to ${CONFIG_PATH}:\n${JSON.stringify(updated, null, 2)}`;
+        if (params.clear_sessions) {
+            responseText += "\n\nAll sessions have been cleared.";
+        }
+        return { content: [{ type: "text", text: responseText }] };
+    });
+}

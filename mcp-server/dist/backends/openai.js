@@ -1,0 +1,33 @@
+import { readFileSync } from "fs";
+import { formatHMS } from "../utils/timestamps.js";
+export const OPENAI_TRANSCRIPTION_TIMEOUT_MS = 120_000;
+export async function transcribeWithOpenAI(wavPath) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error("OPENAI_API_KEY environment variable is not set. Run video_setup to configure.");
+    }
+    const OpenAI = (await import("openai")).default;
+    const client = new OpenAI({
+        apiKey,
+        timeout: OPENAI_TRANSCRIPTION_TIMEOUT_MS,
+        maxRetries: 1,
+    });
+    const audioFile = new File([readFileSync(wavPath)], "audio.wav", { type: "audio/wav" });
+    const response = await client.audio.transcriptions.create({
+        model: "whisper-1",
+        file: audioFile,
+        response_format: "verbose_json",
+        timestamp_granularities: ["segment"],
+    });
+    const transcription = (response.segments || []).map((seg) => ({
+        start: formatHMS(seg.start),
+        end: formatHMS(seg.end),
+        text: seg.text.trim(),
+    }));
+    return {
+        backend: "openai",
+        transcription,
+        audio_tags: [],
+        full_analysis: null,
+    };
+}

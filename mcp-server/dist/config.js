@@ -1,0 +1,29 @@
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync } from "fs";
+import { dirname } from "path";
+export const defaultConfig = {
+    backend: "unconfigured",
+    whisper_engine: "cpp",
+    whisper_model: "auto",
+    whisper_at: false,
+    frame_mode: "images",
+    frame_resolution: 512,
+    default_fps: "auto",
+    max_frames: 100,
+    enable_index: false,
+    session_max_age_days: 7,
+};
+export function loadConfig(configPath) {
+    if (!existsSync(configPath)) {
+        return { ...defaultConfig };
+    }
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    return { ...defaultConfig, ...raw };
+}
+export function saveConfig(configPath, config) {
+    const dir = dirname(configPath);
+    if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+}

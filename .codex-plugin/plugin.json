@@ -1,0 +1,45 @@
+{
+  "name": "codex-video-vision",
+  "version": "0.1.0",
+  "description": "Give Codex a video perception layer by extracting frames, metadata, analysis, and audio transcripts from local video files.",
+  "author": {
+    "name": "Dan Gilles and contributors",
+    "url": "https://github.com/EyrieCommander/codex-video-vision"
+  },
+  "homepage": "https://github.com/EyrieCommander/codex-video-vision",
+  "repository": "https://github.com/EyrieCommander/codex-video-vision",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "video",
+    "vision",
+    "multimodal",
+    "ffmpeg",
+    "whisper",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Codex Video Vision",
+    "shortDescription": "Inspect local videos with frames, transcripts, and ffmpeg analysis.",
+    "longDescription": "A Codex plugin and MCP server for local video perception. It extracts timestamped frames with ffmpeg, analyzes scene changes and audio structure, and transcribes speech through Gemini, local Whisper, or OpenAI Whisper.",
+    "developerName": "Dan Gilles and contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/EyrieCommander/codex-video-vision",
+    "privacyPolicyURL": "https://github.com/EyrieCommander/codex-video-vision/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/EyrieCommander/codex-video-vision/blob/main/LICENSE",
+    "defaultPrompt": [
+      "Analyze this local video file.",
+      "Compare this video against its storyboard.",
+      "Find the missing beats in this video."
+    ],
+    "brandColor": "#2563EB",
+    "composerIcon": "./assets/hero.avif",
+    "logo": "./assets/hero.avif"
+  }
+}
