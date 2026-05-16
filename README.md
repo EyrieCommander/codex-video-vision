@@ -31,6 +31,32 @@ The plugin includes two Codex skills:
   - local Whisper via `whisper.cpp` or Python `openai-whisper`
   - OpenAI Whisper API with `OPENAI_API_KEY`
 
+## Install In Codex
+
+Fastest path: ask your Codex agent to install it for you.
+
+```text
+Install Codex Video Vision from https://github.com/EyrieCommander/codex-video-vision. Clone it to ~/.codex-video-vision/plugin, run npm ci and npm run build in mcp-server, install the video-perception and storyboard-review skills from the GitHub repo into ~/.codex/skills, add an [mcp_servers.codex-video-vision] entry to ~/.codex/config.toml that runs node against ~/.codex-video-vision/plugin/mcp-server/dist/index.js, run npm run smoke:mcp, and then tell me to restart Codex.
+```
+
+The skill install command your agent should use is:
+
+```bash
+/usr/bin/python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo EyrieCommander/codex-video-vision \
+  --path skills/video-perception skills/storyboard-review
+```
+
+The MCP server entry should look like this, with the absolute path adjusted if you cloned elsewhere:
+
+```toml
+[mcp_servers.codex-video-vision]
+command = "node"
+args = ["/Users/you/.codex-video-vision/plugin/mcp-server/dist/index.js"]
+```
+
+Restart Codex after installing. The `$` skill menu is populated from installed skills, so the repo merely existing on disk is not enough.
+
 ## Local Development
 
 Build the MCP server:
