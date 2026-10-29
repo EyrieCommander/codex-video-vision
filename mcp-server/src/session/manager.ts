@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { readFileSync, existsSync, readdirSync, rmSync, statSync, openSync, readSync, closeSync, writeFileSync, mkdirSync } from "fs";
+import { readFileSync, existsSync, readdirSync, rmSync, openSync, readSync, closeSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import type { SessionManifest } from "../types.js";
 
@@ -7,14 +7,16 @@ export function computeVideoHash(videoPath: string): string {
   const fd = openSync(videoPath, "r");
   const chunkSize = 64 * 1024;
   const buffer = Buffer.alloc(chunkSize);
-  const bytesRead = readSync(fd, buffer, 0, chunkSize, 0);
-  closeSync(fd);
-
-  const fileSize = statSync(videoPath).size;
   const hash = createHash("sha256");
-  hash.update(buffer.subarray(0, bytesRead));
-  hash.update(String(fileSize));
-  return hash.digest("hex").slice(0, 12);
+  try {
+    let bytesRead: number;
+    while ((bytesRead = readSync(fd, buffer, 0, chunkSize, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+    return hash.digest("hex");
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export function getSessionDir(sessionsRoot: string, videoPath: string): string {

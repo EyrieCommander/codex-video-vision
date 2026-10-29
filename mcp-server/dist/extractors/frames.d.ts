@@ -24,6 +24,6 @@ export declare function generateTimestampsForSegment(segment: Segment): string[]
 /**
  * Extracts frames for an ordered list of segments, each potentially at a
  * different resolution and fps.  Frames from each segment are written into a
- * sub-directory named after their resolution so they never collide.
+ * separate sub-directory per segment so shorter runs never inherit old JPEGs.
  */
-export declare function extractFramesBySegments(videoPath: string, segments: Segment[], baseOutputDir: string): Promise<SegmentFrame[]>;
+export declare function extractFramesBySegments(videoPath: string, segments: Segment[], baseOutputDir: string, maxFrames?: number): Promise<SegmentFrame[]>;

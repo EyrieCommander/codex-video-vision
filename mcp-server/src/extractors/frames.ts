@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { readFileSync, readdirSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import type { VideoMetadata, Frame, Segment } from "../types.js";
-import { formatHMS, parseHMS } from "../utils/timestamps.js";
+import { formatFrameTimestamp, parseHMS, extractionDuration } from "../utils/timestamps.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,7 +14,7 @@ export async function getVideoMetadata(videoPath: string): Promise<VideoMetadata
     "-show_format",
     "-show_streams",
     videoPath,
-  ]);
+  ], { timeout: 30_000 });
 
   const probe = JSON.parse(stdout);
   const videoStream = probe.streams.find((s: any) => s.codec_type === "video");
@@ -69,6 +69,10 @@ export async function extractFrames(
 ): Promise<Frame[]> {
   const { fps, resolution, outputDir, startTime, endTime, maxFrames = 100 } = options;
 
+  const duration = extractionDuration(startTime, endTime);
+  if (!Number.isFinite(fps) || fps <= 0) throw new Error("FPS must be positive and finite");
+  if (!Number.isInteger(maxFrames) || maxFrames < 1) throw new Error("maxFrames must be a positive integer");
+
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
@@ -81,8 +85,8 @@ export async function extractFrames(
 
   args.push("-i", videoPath);
 
-  if (endTime) {
-    args.push("-to", endTime);
+  if (duration !== undefined) {
+    args.push("-t", String(duration));
   }
 
   args.push(
@@ -92,7 +96,7 @@ export async function extractFrames(
     join(outputDir, "frame_%04d.jpg"),
   );
 
-  await execFileAsync("ffmpeg", args);
+  await execFileAsync("ffmpeg", args, { timeout: 600_000 });
 
   const files = readdirSync(outputDir)
     .filter((f) => f.startsWith("frame_") && f.endsWith(".jpg"))
@@ -104,7 +108,7 @@ export async function extractFrames(
     const filePath = join(outputDir, file);
     const imageData = readFileSync(filePath);
     const base64 = imageData.toString("base64");
-    const timestamp = formatHMS(offsetSeconds + index / fps);
+    const timestamp = formatFrameTimestamp(offsetSeconds + index / fps);
 
     return {
       timestamp,
@@ -135,7 +139,7 @@ export function generateTimestampsForSegment(segment: Segment): string[] {
   const timestamps: string[] = [];
 
   for (let t = startSec; t < endSec; t += interval) {
-    timestamps.push(formatHMS(Math.round(t)));
+    timestamps.push(formatFrameTimestamp(t));
   }
 
   return timestamps;
@@ -144,18 +148,22 @@ export function generateTimestampsForSegment(segment: Segment): string[] {
 /**
  * Extracts frames for an ordered list of segments, each potentially at a
  * different resolution and fps.  Frames from each segment are written into a
- * sub-directory named after their resolution so they never collide.
+ * separate sub-directory per segment so shorter runs never inherit old JPEGs.
  */
 export async function extractFramesBySegments(
   videoPath: string,
   segments: Segment[],
   baseOutputDir: string,
+  maxFrames = 100,
 ): Promise<SegmentFrame[]> {
+  if (!Number.isInteger(maxFrames) || maxFrames < 1) throw new Error("maxFrames must be a positive integer");
+  for (const segment of segments) extractionDuration(segment.start, segment.end);
   const allFrames: SegmentFrame[] = [];
 
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
+    if (allFrames.length >= maxFrames) break;
     const resolution = segment.resolution ?? 512;
-    const resDir = join(baseOutputDir, String(resolution));
+    const resDir = join(baseOutputDir, `segment-${index}`);
 
     if (!existsSync(resDir)) mkdirSync(resDir, { recursive: true });
 
@@ -165,7 +173,7 @@ export async function extractFramesBySegments(
       outputDir: resDir,
       startTime: segment.start,
       endTime: segment.end,
-      maxFrames: 1000,
+      maxFrames: maxFrames - allFrames.length,
     });
 
     for (const frame of frames) {

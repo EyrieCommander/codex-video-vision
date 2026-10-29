@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { join } from "path";
 import { homedir } from "os";
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadConfig } from "../config.js";
@@ -24,7 +24,7 @@ import type { SessionManifest } from "../types.js";
 const CONFIG_PATH = join(homedir(), ".codex-video-vision", "config.json");
 const SESSIONS_DIR = join(homedir(), ".codex-video-vision", "sessions");
 
-const HMS_REGEX = /^\d{2}:\d{2}:\d{2}$/;
+const HMS_REGEX = /^\d{2}:[0-5]\d:[0-5]\d$/;
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -58,11 +58,12 @@ function timestampToFilename(ts: string): string {
 function buildViewablePool(
   extractedFrames: SegmentFrame[],
   manifest: SessionManifest | null,
+  count: number,
 ): ViewableFrame[] {
   if (extractedFrames.length > 0) {
-    return extractedFrames.map((f) => ({
-      timestamp: f.timestamp,
-      image: f.image,
+    return sampleFrameIndices(extractedFrames.length, count).map((i) => ({
+      timestamp: extractedFrames[i].timestamp,
+      image: extractedFrames[i].image,
     }));
   }
 
@@ -81,8 +82,8 @@ function buildViewablePool(
     }
   }
 
-  return Array.from(byTimestamp.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
+  const entries = Array.from(byTimestamp.entries()).sort(([a], [b]) => a.localeCompare(b));
+  return sampleFrameIndices(entries.length, count).map((i) => entries[i])
     .map(([timestamp, { file }]) => {
       try {
         const data = readFileSync(file);
@@ -157,13 +158,14 @@ export function registerVideoDetail(server: McpServer): void {
         .optional()
         .describe("Segments to extract frames from"),
       view: z
-        .array(z.string().regex(HMS_REGEX, "Must be HH:MM:SS format"))
+        .array(z.string().regex(/^\d{2}:[0-5]\d:[0-5]\d(?:\.\d{1,6})?$/, "Must be HH:MM:SS with optional fractional seconds"))
         .optional()
         .describe(
           "Specific timestamps to return as images from the session cache",
         ),
       view_sample: z
         .number()
+        .int()
         .min(1)
         .optional()
         .describe("Return N evenly spaced frames from the extracted set"),
@@ -199,14 +201,14 @@ export function registerVideoDetail(server: McpServer): void {
       if (params.segments && params.segments.length > 0) {
         // Always extract to a temporary directory so ffmpeg's sequential
         // frame_XXXX.jpg naming never overwrites previously cached files.
-        const tmpWorkDir = join(tmpdir(), `cvv-detail-${Date.now()}`);
-        mkdirSync(tmpWorkDir, { recursive: true });
+        const tmpWorkDir = mkdtempSync(join(tmpdir(), "cvv-detail-"));
 
         try {
           extractedFrames = await extractFramesBySegments(
             safePath,
             params.segments,
             tmpWorkDir,
+            config.max_frames,
           );
         } finally {
           rmSync(tmpWorkDir, { recursive: true, force: true });
@@ -262,10 +264,10 @@ export function registerVideoDetail(server: McpServer): void {
         // Mode A: caller specified exact timestamps.
         if (manifest) {
           // Look them up in the session cache (highest resolution preferred).
-          framesToView = lookupTimestampsInManifest(manifest, params.view);
+          framesToView = lookupTimestampsInManifest(manifest, params.view.slice(0, config.max_frames));
         } else {
           // No session — filter from frames just extracted in this call.
-          for (const ts of params.view) {
+          for (const ts of params.view.slice(0, config.max_frames)) {
             const match = extractedFrames.find((f) => f.timestamp === ts);
             if (match) {
               framesToView.push({ timestamp: match.timestamp, image: match.image });
@@ -274,12 +276,10 @@ export function registerVideoDetail(server: McpServer): void {
         }
       } else if (params.view_sample !== undefined) {
         // Mode B: return N evenly spaced frames.
-        const pool = buildViewablePool(extractedFrames, manifest);
-        const indices = sampleFrameIndices(pool.length, params.view_sample);
-        framesToView = indices.map((i) => pool[i]);
+        framesToView = buildViewablePool(extractedFrames, manifest, Math.min(params.view_sample, config.max_frames));
       } else {
-        // Mode C: return all available frames.
-        framesToView = buildViewablePool(extractedFrames, manifest);
+        // Mode C: return available frames within the configured frame budget.
+        framesToView = buildViewablePool(extractedFrames, manifest, config.max_frames);
       }
 
       // ------------------------------------------------------------------

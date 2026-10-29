@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, rmSync } from "fs";
-import { dirname, resolve } from "path";
+import { mkdtempSync, readFileSync, rmSync } from "fs";
+import { dirname, join, resolve } from "path";
+import { tmpdir } from "os";
 import { fileURLToPath } from "url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -8,7 +9,6 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const mcpRoot = resolve(scriptDir, "..");
 const repoRoot = resolve(mcpRoot, "..");
 const fixture = resolve(mcpRoot, "tests/fixtures/test-3s.mp4");
-const smokeHome = "/private/tmp/codex-video-vision-smoke-home";
 
 function assert(condition, message) {
   if (!condition) {
@@ -25,8 +25,7 @@ function textAt(result, index) {
 const mcpConfig = JSON.parse(readFileSync(resolve(repoRoot, ".mcp.json"), "utf8"))["codex-video-vision"];
 assert(mcpConfig?.command && Array.isArray(mcpConfig.args), "Missing codex-video-vision entry in .mcp.json");
 
-rmSync(smokeHome, { recursive: true, force: true });
-mkdirSync(smokeHome, { recursive: true });
+const smokeHome = mkdtempSync(join(tmpdir(), "codex-video-vision-smoke-"));
 
 const transport = new StdioClientTransport({
   command: mcpConfig.command,
@@ -116,6 +115,29 @@ try {
   });
   assert(detail.content.filter((item) => item.type === "image").length === 2, "video_detail returned unexpected image count");
 
+  // Both watch paths must populate frames that a later detail call can read.
+  for (const segmented of [false, true]) {
+    await client.callTool({
+      name: "video_configure",
+      arguments: { enable_index: true, clear_sessions: true },
+    });
+    const watch = await client.callTool({
+      name: "video_watch",
+      arguments: {
+        path: fixture, skip_audio: true, fps: 1, resolution: 256,
+        ...(segmented ? { segments: [{ start: "00:00:00", end: "00:00:03", fps: 1, resolution: 256 }] } : {}),
+      },
+    });
+    const cached = await client.callTool({
+      name: "video_detail",
+      arguments: { path: fixture, view: ["00:00:01"] },
+    });
+    const expected = watch.content.filter((item) => item.type === "image")[1];
+    const actual = cached.content.filter((item) => item.type === "image");
+    assert(expected && actual.length === 1 && actual[0].data === expected.data,
+      `video_detail could not retrieve the cached video_watch frame (segmented=${segmented})`);
+  }
+
   console.log(JSON.stringify({
     server,
     tools: toolNames,
@@ -126,6 +148,7 @@ try {
     watch_images: watchImages.content.filter((item) => item.type === "image").length,
     watch_descriptions_images: watchDescriptions.content.filter((item) => item.type === "image").length,
     detail_images: detail.content.filter((item) => item.type === "image").length,
+    watch_cache_modes_verified: ["regular", "segmented"],
   }, null, 2));
 
   await client.close();
@@ -135,4 +158,6 @@ try {
   }
   await transport.close().catch(() => {});
   throw error;
+} finally {
+  rmSync(smokeHome, { recursive: true, force: true });
 }

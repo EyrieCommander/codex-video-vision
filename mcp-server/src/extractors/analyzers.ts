@@ -237,7 +237,7 @@ export function parseBlurOutput(
   metaFileContent: string,
 ): Array<{ timestamp: string; blur: number }> {
   const results: Array<{ timestamp: string; blur: number }> = [];
-  const frameRe = /# frame:\d+.*?pts_time:([\d.]+)([\s\S]*?)(?=# frame:|$)/g;
+  const frameRe = /(?:^|\n)(?:# )?frame:\d+[^\n]*?pts_time:([\d.]+)([\s\S]*?)(?=\n(?:# )?frame:|$)/g;
   const blurRe = /lavfi\.blur=([\d.]+)/;
 
   let m: RegExpExecArray | null;
@@ -255,7 +255,7 @@ export function parseSignalstatsOutput(
   metaFileContent: string,
 ): Array<{ timestamp: string; brightness?: number; saturation?: number }> {
   const results: Array<{ timestamp: string; brightness?: number; saturation?: number }> = [];
-  const frameRe = /# frame:\d+.*?pts_time:([\d.]+)([\s\S]*?)(?=# frame:|$)/g;
+  const frameRe = /(?:^|\n)(?:# )?frame:\d+[^\n]*?pts_time:([\d.]+)([\s\S]*?)(?=\n(?:# )?frame:|$)/g;
   const yAvgRe = /lavfi\.signalstats\.YAVG=([\d.]+)/;
   const uAvgRe = /lavfi\.signalstats\.UAVG=([\d.]+)/;
   const vAvgRe = /lavfi\.signalstats\.VAVG=([\d.]+)/;

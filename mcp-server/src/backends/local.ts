@@ -1,11 +1,11 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { existsSync, mkdirSync, rmSync, createReadStream } from "fs";
+import { existsSync, mkdirSync, rmSync, createReadStream, mkdtempSync, renameSync, readFileSync } from "fs";
 import { createHash } from "crypto";
 import { basename, dirname, join } from "path";
-import { pipeline } from "stream/promises";
+import { pipeline } from "node:stream/promises";
 import { detectPlatform, recommendWhisperModel } from "../utils/platform.js";
-import { formatHMS } from "../utils/timestamps.js";
+import { formatHMS, parseHMS } from "../utils/timestamps.js";
 import type { AudioResult, TranscriptionSegment, AudioTag } from "../types.js";
 import type { WhisperEngine, WhisperModel } from "../types.js";
 
@@ -61,46 +61,50 @@ async function transcribeWithWhisperCpp(
     "large-v3-turbo":  "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
   };
 
+  const expectedSha = KNOWN_CHECKSUMS[resolved];
+  if (!expectedSha) throw new Error(`No known checksum for model "${resolved}"`);
+
+  const verifyModel = async (path: string) => {
+    const hash = createHash("sha256");
+    await pipeline(createReadStream(path), hash);
+    if (hash.digest("hex") !== expectedSha) {
+      throw new Error(`Model checksum mismatch for ggml-${resolved}.bin`);
+    }
+  };
+
   if (!existsSync(modelPath)) {
-    const dir = dirname(modelPath);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
-    const downloadUrl = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${resolved}.bin`;
-    console.error(`[cvv] Downloading whisper model ggml-${resolved}.bin...`);
-    await execFileAsync("curl", ["-L", "-o", modelPath, downloadUrl], {
-      timeout: 600_000,
-    });
-    console.error(`[cvv] Model downloaded to ${modelPath}`);
-
-    if (!existsSync(modelPath)) {
-      throw new Error(`Failed to download model from ${downloadUrl}`);
+    mkdirSync(modelDir, { recursive: true });
+    // Only publish verified bytes. Each request owns its download scratch path.
+    const downloadDir = mkdtempSync(join(modelDir, ".download-"));
+    const downloadPath = join(downloadDir, "model.bin");
+    try {
+      const downloadUrl = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${resolved}.bin`;
+      await execFileAsync("curl", ["--fail", "-L", "-o", downloadPath, downloadUrl], {
+        timeout: 600_000,
+      });
+      await verifyModel(downloadPath);
+      renameSync(downloadPath, modelPath);
+    } finally {
+      rmSync(downloadDir, { recursive: true, force: true });
     }
-
-    const expectedSha = KNOWN_CHECKSUMS[resolved];
-    if (expectedSha) {
-      const hash = createHash("sha256");
-      await pipeline(createReadStream(modelPath), hash);
-      const actual = hash.digest("hex");
-      if (actual !== expectedSha) {
-        throw new Error(
-          `Model checksum mismatch for ggml-${resolved}.bin — expected ${expectedSha}, got ${actual}. ` +
-          `The downloaded file may be corrupt or tampered with.`,
-        );
-      }
-      console.error(`[cvv] Checksum verified for ggml-${resolved}.bin`);
-    } else {
-      console.error(`[cvv] Warning: no known checksum for model "${resolved}" — skipping verification`);
-    }
+  } else {
+    // Recheck legacy caches too: earlier versions left failed downloads here.
+    await verifyModel(modelPath);
   }
 
-  const { stdout } = await execFileAsync("whisper-cli", [
-    "--model", modelPath,
-    "--file", wavPath,
-    "--output-json",
-    "--language", "auto",
-  ], { timeout: 600_000, maxBuffer: 50 * 1024 * 1024 });
-
-  return parseWhisperOutput(stdout);
+  const jsonPath = `${wavPath}.json`;
+  try {
+    await execFileAsync("whisper-cli", [
+      "--model", modelPath,
+      "--file", wavPath,
+      "--output-json",
+      "--output-file", wavPath,
+      "--language", "auto",
+    ], { timeout: 600_000, maxBuffer: 50 * 1024 * 1024 });
+    return parseWhisperOutput(readFileSync(jsonPath, "utf-8"));
+  } finally {
+    rmSync(jsonPath, { force: true });
+  }
 }
 
 async function transcribeWithWhisperPython(
@@ -119,22 +123,28 @@ async function transcribeWithWhisperPython(
   // gets reaped with it, instead of polluting the user's CWD.
   const outputDir = dirname(wavPath);
 
-  const { stdout } = await execFileAsync(command, [
-    wavPath,
-    "--model", model,
-    "--output_format", "json",
-    "--output_dir", outputDir,
-  ], { timeout: 600_000, maxBuffer: 50 * 1024 * 1024 });
-
-  // Best-effort cleanup of the on-disk JSON; we already have what we
-  // need on stdout via parseWhisperOutput. The CLI derives the output
-  // filename from the input wav, so derive it the same way.
+  const jsonPath = join(outputDir, basename(wavPath, ".wav") + ".json");
   try {
-    const jsonName = basename(wavPath, ".wav") + ".json";
-    rmSync(join(outputDir, jsonName), { force: true });
-  } catch { /* ignore */ }
+    await execFileAsync(command, [
+      wavPath,
+      "--model", model,
+      "--output_format", "json",
+      "--output_dir", outputDir,
+    ], { timeout: 600_000, maxBuffer: 50 * 1024 * 1024 });
+    return parseWhisperOutput(readFileSync(jsonPath, "utf-8"));
+  } finally {
+    rmSync(jsonPath, { force: true });
+  }
+}
 
-  return parseWhisperOutput(stdout);
+function whisperTimestamp(segment: any, edge: "start" | "end"): string {
+  if (typeof segment[edge] === "number") return formatHMS(segment[edge]);
+  const cppEdge = edge === "start" ? "from" : "to";
+  const offset = segment.offsets?.[cppEdge];
+  if (typeof offset === "number") return formatHMS(offset / 1000);
+  const timestamp = segment.timestamps?.[cppEdge];
+  if (typeof timestamp === "string") return formatHMS(parseHMS(timestamp.replace(",", ".")));
+  return formatHMS(segment[cppEdge] ?? 0);
 }
 
 function parseWhisperOutput(output: string): AudioResult {
@@ -147,8 +157,8 @@ function parseWhisperOutput(output: string): AudioResult {
 
     for (const seg of segments) {
       transcription.push({
-        start: formatHMS(seg.start ?? seg.from ?? 0),
-        end: formatHMS(seg.end ?? seg.to ?? 0),
+        start: whisperTimestamp(seg, "start"),
+        end: whisperTimestamp(seg, "end"),
         text: (seg.text || "").trim(),
       });
     }

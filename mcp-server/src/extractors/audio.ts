@@ -3,6 +3,8 @@ import { promisify } from "util";
 import { mkdirSync, existsSync } from "fs";
 import { join } from "path";
 
+import { extractionDuration } from "../utils/timestamps.js";
+
 const execFileAsync = promisify(execFile);
 
 export interface ExtractAudioOptions {
@@ -15,6 +17,7 @@ export async function extractAudio(
   outputDir: string,
   options: ExtractAudioOptions = {},
 ): Promise<string> {
+  const duration = extractionDuration(options.startTime, options.endTime);
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
@@ -28,8 +31,8 @@ export async function extractAudio(
 
   args.push("-i", videoPath);
 
-  if (options.endTime) {
-    args.push("-to", options.endTime);
+  if (duration !== undefined) {
+    args.push("-t", String(duration));
   }
 
   args.push(
@@ -41,6 +44,6 @@ export async function extractAudio(
     outputPath,
   );
 
-  await execFileAsync("ffmpeg", args);
+  await execFileAsync("ffmpeg", args, { timeout: 600_000 });
   return outputPath;
 }

@@ -27,6 +27,8 @@ export function getUncachedTimestamps(manifest, resolution, wanted) {
     return wanted.filter((ts) => !cached.has(ts));
 }
 export function sampleFrameIndices(totalFrames, count) {
+    if (!Number.isInteger(count) || count < 1)
+        throw new Error("Frame sample count must be a positive integer");
     if (totalFrames === 0)
         return [];
     if (count >= totalFrames)

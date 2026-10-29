@@ -102,13 +102,12 @@ export async function analyzeWithGeminiApi(audioPath: string): Promise<AudioResu
     config: { mimeType: getMimeType(audioPath) },
   });
 
-  await waitForFileActive(ai as unknown as GenAiClient, uploaded);
-
   try {
+    const active = await waitForFileActive(ai as unknown as GenAiClient, uploaded);
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: createUserContent([
-        createPartFromUri(uploaded.uri!, uploaded.mimeType!),
+        createPartFromUri(active.uri!, active.mimeType!),
         `Analyze this audio track and return structured JSON.
 
 Produce two arrays:
@@ -183,7 +182,7 @@ Use "00:00:00" if you cannot determine a timestamp. Return empty arrays if no sp
       full_analysis: null,
     };
   } finally {
-    await ai.files.delete({ name: uploaded.name! }).catch(() => {});
+    if (uploaded.name) await ai.files.delete({ name: uploaded.name }).catch(() => {});
   }
 }
 

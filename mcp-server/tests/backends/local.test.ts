@@ -17,7 +17,7 @@ vi.mock("child_process", () => ({
     ) => void,
   ) => {
     execFileCalls.push({ command, args });
-    // Empty-but-valid whisper JSON on stdout; parseWhisperOutput tolerates it.
+    // The adapter reads the companion JSON; stdout is irrelevant.
     callback(null, { stdout: "{}", stderr: "" });
   },
   exec: (
@@ -40,6 +40,7 @@ vi.mock("fs", async () => {
   const actual = await vi.importActual<typeof import("fs")>("fs");
   return {
     ...actual,
+    readFileSync: () => "{}",
     rmSync: (path: string, _options?: unknown) => {
       rmSyncCalls.push(path);
     },

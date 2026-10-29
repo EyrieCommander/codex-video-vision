@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { z } from "zod";
 import { join } from "path";
 import { homedir } from "os";
-import { mkdirSync, rmSync, existsSync, readFileSync } from "fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { loadConfig } from "../config.js";
@@ -94,8 +94,7 @@ export function registerVideoAnalyze(server: McpServer): void {
       const metadata = await getVideoMetadata(safePath);
 
       // 2. Create temp work dir
-      const workDir = join(tmpdir(), `cvv-analyze-${Date.now()}`);
-      mkdirSync(workDir, { recursive: true });
+      const workDir = mkdtempSync(join(tmpdir(), "cvv-analyze-"));
 
       let analysis: VideoAnalysis = {
         scenes: [],
@@ -114,17 +113,12 @@ export function registerVideoAnalyze(server: McpServer): void {
         let stderr = "";
 
         if (cmd !== null) {
-          // 4. Run ffmpeg — wrap in try/catch because some filter combos yield non-zero exit
-          try {
-            const result = await execFileAsync("ffmpeg", cmd.args, {
-              timeout: 600_000,
-              maxBuffer: 100 * 1024 * 1024,
-            });
-            stderr = result.stderr;
-          } catch (err: any) {
-            // Many filters still produce valid output on stderr even when ffmpeg exits non-zero
-            stderr = err.stderr || "";
-          }
+          // A failed subprocess cannot establish a negative analysis result.
+          const result = await execFileAsync("ffmpeg", cmd.args, {
+            timeout: 600_000,
+            maxBuffer: 100 * 1024 * 1024,
+          });
+          stderr = result.stderr;
 
           // 5. Parse scene changes from metadata file (scdet writes to frame metadata, not stderr)
           if (filters.scene_changes && existsSync(cmd.videoMetaFile)) {

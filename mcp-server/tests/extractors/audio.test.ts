@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { execFileSync } from "child_process";
 import { extractAudio } from "../../src/extractors/audio.js";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
@@ -20,9 +21,12 @@ describe("audio extraction", () => {
 
   it("supports start_time and end_time", async () => {
     const wavPath = await extractAudio(FIXTURE, OUT_DIR, {
-      startTime: "00:00:00",
+      startTime: "00:00:01",
       endTime: "00:00:02",
     });
-    expect(existsSync(wavPath)).toBe(true);
+    const duration = execFileSync("ffprobe", [
+      "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", wavPath,
+    ], { encoding: "utf-8" });
+    expect(Number(duration)).toBeCloseTo(1, 1);
   });
 });

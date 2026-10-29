@@ -2,8 +2,10 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { mkdirSync, existsSync } from "fs";
 import { join } from "path";
+import { extractionDuration } from "../utils/timestamps.js";
 const execFileAsync = promisify(execFile);
 export async function extractAudio(videoPath, outputDir, options = {}) {
+    const duration = extractionDuration(options.startTime, options.endTime);
     if (!existsSync(outputDir)) {
         mkdirSync(outputDir, { recursive: true });
     }
@@ -13,10 +15,10 @@ export async function extractAudio(videoPath, outputDir, options = {}) {
         args.push("-ss", options.startTime);
     }
     args.push("-i", videoPath);
-    if (options.endTime) {
-        args.push("-to", options.endTime);
+    if (duration !== undefined) {
+        args.push("-t", String(duration));
     }
     args.push("-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", "-y", outputPath);
-    await execFileAsync("ffmpeg", args);
+    await execFileAsync("ffmpeg", args, { timeout: 600_000 });
     return outputPath;
 }

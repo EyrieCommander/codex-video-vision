@@ -11,6 +11,8 @@ import {
   parseSilenceOutput,
   parseFreezeOutput,
   parseSitiOutput,
+  parseBlurOutput,
+  parseSignalstatsOutput,
   parseEbur128Output,
   deriveContentProfile,
 } from "../../src/extractors/analyzers.js";
@@ -323,5 +325,26 @@ describe("deriveContentProfile", () => {
     const profile = deriveContentProfile(undefined, 40);
     expect(profile).toContain("unknown visual complexity");
     expect(profile).toContain("high motion");
+  });
+});
+
+describe("per-frame metadata parsing", () => {
+  it.each(["", "# "])("accepts %sframe headers and keeps values in their own frame", (prefix) => {
+    const meta = `${prefix}frame:0 pts:0 pts_time:0
+lavfi.blur=4.86
+lavfi.signalstats.YAVG=111.3
+lavfi.signalstats.UAVG=128
+lavfi.signalstats.VAVG=128
+${prefix}frame:1 pts:1 pts_time:1
+lavfi.blur=2.5
+lavfi.signalstats.YAVG=50
+`;
+    expect(parseBlurOutput(meta)).toEqual([
+      { timestamp: "00:00:00", blur: 4.86 }, { timestamp: "00:00:01", blur: 2.5 },
+    ]);
+    expect(parseSignalstatsOutput(meta)).toEqual([
+      { timestamp: "00:00:00", brightness: 111.3, saturation: 0 },
+      { timestamp: "00:00:01", brightness: 50, saturation: undefined },
+    ]);
   });
 });

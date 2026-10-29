@@ -74,3 +74,7 @@ describe("manifest", () => {
     });
   });
 });
+
+it("rejects fractional sample counts instead of producing out-of-range indices", () => {
+  expect(() => sampleFrameIndices(6, 1.5)).toThrow(/positive integer/);
+});

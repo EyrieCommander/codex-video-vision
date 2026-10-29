@@ -180,7 +180,7 @@ export function parseSitiOutput(stderr) {
 }
 export function parseBlurOutput(metaFileContent) {
     const results = [];
-    const frameRe = /# frame:\d+.*?pts_time:([\d.]+)([\s\S]*?)(?=# frame:|$)/g;
+    const frameRe = /(?:^|\n)(?:# )?frame:\d+[^\n]*?pts_time:([\d.]+)([\s\S]*?)(?=\n(?:# )?frame:|$)/g;
     const blurRe = /lavfi\.blur=([\d.]+)/;
     let m;
     while ((m = frameRe.exec(metaFileContent)) !== null) {
@@ -193,7 +193,7 @@ export function parseBlurOutput(metaFileContent) {
 }
 export function parseSignalstatsOutput(metaFileContent) {
     const results = [];
-    const frameRe = /# frame:\d+.*?pts_time:([\d.]+)([\s\S]*?)(?=# frame:|$)/g;
+    const frameRe = /(?:^|\n)(?:# )?frame:\d+[^\n]*?pts_time:([\d.]+)([\s\S]*?)(?=\n(?:# )?frame:|$)/g;
     const yAvgRe = /lavfi\.signalstats\.YAVG=([\d.]+)/;
     const uAvgRe = /lavfi\.signalstats\.UAVG=([\d.]+)/;
     const vAvgRe = /lavfi\.signalstats\.VAVG=([\d.]+)/;

@@ -46,6 +46,20 @@ describe("frame extraction", () => {
   });
 
   describe("extractFrames", () => {
+    it("honors nonzero crop origins and preserves subsecond frame identities", async () => {
+      const frames = await extractFrames(FIXTURE, {
+        fps: 2, resolution: 128, outputDir: OUT_DIR,
+        startTime: "00:00:01", endTime: "00:00:02",
+      });
+      expect(frames.map((f) => f.timestamp)).toEqual(["00:00:01", "00:00:01.5"]);
+    });
+
+    it("rejects reversed windows before extraction", async () => {
+      await expect(extractFrames(FIXTURE, {
+        fps: 1, resolution: 128, outputDir: OUT_DIR,
+        startTime: "00:00:02", endTime: "00:00:01",
+      })).rejects.toThrow(/End time/);
+    });
     it("extracts frames as base64 images with timestamps", async () => {
       const result = await extractFrames(FIXTURE, {
         fps: 1,

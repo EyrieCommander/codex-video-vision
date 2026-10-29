@@ -30,6 +30,31 @@ describe("segment-based frame extraction", () => {
   });
 
   describe("extractFramesBySegments", () => {
+    const repeatedResolution: Segment[] = [
+      { start: "00:00:00", end: "00:00:03", fps: 1, resolution: 128 },
+      { start: "00:00:00", end: "00:00:01", fps: 1, resolution: 128 },
+    ];
+
+    it("does not inherit JPEGs from a longer segment at the same resolution", async () => {
+      const frames = await extractFramesBySegments(FIXTURE, repeatedResolution, OUT_DIR);
+      expect(frames.map((f) => f.timestamp)).toEqual([
+        "00:00:00", "00:00:01", "00:00:02", "00:00:00",
+      ]);
+    });
+
+    it("shares one frame budget across all segments", async () => {
+      const frames = await extractFramesBySegments(FIXTURE, repeatedResolution, OUT_DIR, 2);
+      expect(frames).toHaveLength(2);
+      expect(frames.map((f) => f.timestamp)).toEqual(["00:00:00", "00:00:01"]);
+    });
+
+    it("carries the remaining budget into subsequent segments", async () => {
+      const frames = await extractFramesBySegments(FIXTURE, [
+        repeatedResolution[1], repeatedResolution[0],
+      ], OUT_DIR, 2);
+      expect(frames).toHaveLength(2);
+      expect(frames.map((f) => f.timestamp)).toEqual(["00:00:00", "00:00:00"]);
+    });
     it("extracts frames for a single segment", async () => {
       const segments: Segment[] = [
         { start: "00:00:00", end: "00:00:03", fps: 1, resolution: 256 },

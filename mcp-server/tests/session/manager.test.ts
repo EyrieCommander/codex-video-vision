@@ -12,11 +12,11 @@ describe("session manager", () => {
   afterEach(() => { rmSync(TEST_DIR, { recursive: true, force: true }); });
 
   describe("computeVideoHash", () => {
-    it("returns a 12-char hex string", () => {
+    it("returns a 64-char hex string", () => {
       const testFile = join(TEST_DIR, "test.mp4");
       writeFileSync(testFile, Buffer.alloc(128 * 1024, "x"));
       const hash = computeVideoHash(testFile);
-      expect(hash).toMatch(/^[a-f0-9]{12}$/);
+      expect(hash).toMatch(/^[a-f0-9]{64}$/);
     });
 
     it("returns same hash for same content", () => {
@@ -26,6 +26,15 @@ describe("session manager", () => {
       writeFileSync(file1, content);
       writeFileSync(file2, content);
       expect(computeVideoHash(file1)).toBe(computeVideoHash(file2));
+    });
+
+    it("separates equal-sized videos with identical first 64 KiB", () => {
+      const a = join(TEST_DIR, "prefix-a.mp4");
+      const b = join(TEST_DIR, "prefix-b.mp4");
+      const common = Buffer.alloc(64 * 1024, "x");
+      writeFileSync(a, Buffer.concat([common, Buffer.from("tail-a")]));
+      writeFileSync(b, Buffer.concat([common, Buffer.from("tail-b")]));
+      expect(computeVideoHash(a)).not.toBe(computeVideoHash(b));
     });
 
     it("returns different hash for different content", () => {
@@ -43,7 +52,7 @@ describe("session manager", () => {
       writeFileSync(testFile, Buffer.alloc(128 * 1024, "x"));
       const dir = getSessionDir(SESSIONS_DIR, testFile);
       expect(dir).toContain(SESSIONS_DIR);
-      expect(dir).toMatch(/[a-f0-9]{12}$/);
+      expect(dir).toMatch(/[a-f0-9]{64}$/);
     });
   });
 

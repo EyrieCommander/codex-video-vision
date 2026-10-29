@@ -42,6 +42,7 @@ export function getUncachedTimestamps(
 }
 
 export function sampleFrameIndices(totalFrames: number, count: number): number[] {
+  if (!Number.isInteger(count) || count < 1) throw new Error("Frame sample count must be a positive integer");
   if (totalFrames === 0) return [];
   if (count >= totalFrames) return Array.from({ length: totalFrames }, (_, i) => i);
   if (count === 1) return [0];

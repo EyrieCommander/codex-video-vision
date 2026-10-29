@@ -13,7 +13,7 @@ export function registerVideoConfigure(server) {
         frame_mode: z.enum(["images", "descriptions"]).optional(),
         frame_resolution: z.number().min(128).max(2048).optional(),
         default_fps: z.union([z.number().positive(), z.literal("auto")]).optional(),
-        max_frames: z.number().min(1).max(1000).optional(),
+        max_frames: z.number().int().min(1).max(1000).optional(),
         enable_index: z.boolean().optional(),
         session_max_age_days: z.number().min(1).optional(),
         clear_sessions: z.boolean().optional(),
